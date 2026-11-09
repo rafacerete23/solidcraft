@@ -84,7 +84,7 @@ pub static COMMANDS: &[CommandSpec] = &[
         .noundo()
         .contract(&EXPORT_CONTRACT)
         .output(crate::schema::output_schema_for::<crate::schema::file::FileExportResult>)
-        .params("path; format?: stl|stla|obj|step|3mf|3mf-tagged|urdf|json (default from extension; 3mf-tagged: 3MF whose triangles carry their B-rep face, at full precision, for meshing and analysis tools; docs/formats/3mf-face-tags.md; obj: the colours of the bodies go in a material library (`.mtl`) written next to the mesh file; urdf: the whole assembly as a robot, with STL meshes written next to it; docs/urdf.md); bodies?: [names] (JSON and URDF export the complete design); urdf only: mesh_prefix? (before each mesh file name, e.g. package://robot/meshes/), effort? (default 1000), velocity? (default 10); quality?: standard|fine|finest (STL, OBJ and 3MF: how closely the mesh follows curved faces, a chord tolerance of 2e-4, 5e-5 or 1e-5 of each body's size; default standard); objects?: body|component (3MF only: one object per body, the default, or one object for each placed component with two or more bodies, with those bodies as its parts, so a slicer loads them as one object with parts)"),
+        .params("path; format?: stl|stla|obj|step|3mf|3mf-tagged|urdf|json (default from extension; 3mf-tagged: 3MF whose triangles carry their B-rep face, at full precision, for meshing and analysis tools; docs/formats/3mf-face-tags.md; obj: the colours of the bodies go in a material library (`.mtl`) written next to the mesh file; urdf: the whole assembly as a robot, with STL meshes written next to it; docs/urdf.md); bodies?: [names] (JSON and URDF export the complete design); urdf only: mesh_prefix? (before each mesh file name, e.g. package://robot/meshes/), effort? (default 1000), velocity? (default 10); quality?: standard|fine|finest (STL, OBJ and 3MF: how closely the mesh follows curved faces, a chord tolerance of 2e-4, 5e-5 or 1e-5 of each body's size; default standard); units?: mm|cm|m|in|ft (STL and 3MF: the unit the coordinates are written in, scaled from the design's millimetres; a 3MF states it in its `unit` attribute, an STL has no unit field; default mm); objects?: body|component (3MF only: one object per body, the default, or one object for each placed component with two or more bodies, with those bodies as its parts, so a slicer loads them as one object with parts)"),
     // One command per format, so each File › Export item can have a key of its own; started
     // from a key or command search, the app opens the save picker (the mesh dialog for STL and
     // 3MF). Each takes `file.export`'s parameters for its format, without `format`.
@@ -99,13 +99,13 @@ pub static COMMANDS: &[CommandSpec] = &[
         .noundo()
         .contract(&EXPORT_STL_CONTRACT)
         .output(crate::schema::output_schema_for::<crate::schema::file::ExportResult>)
-        .params("path; bodies?: [names] (default: every body); quality?: standard|fine|finest (default standard) → {path, bytes, format}: binary STL, whatever the path's extension"),
+        .params("path; bodies?: [names] (default: every body); quality?: standard|fine|finest (default standard); units?: mm|cm|m|in|ft (the unit the coordinates are written in; default mm) → {path, bytes, format}: binary STL, whatever the path's extension"),
     CommandSpec::new("file.export_3mf", "Export 3MF", crate::checked!("file.export_3mf", export_3mf))
         .icon("mesh_export")
         .noundo()
         .contract(&EXPORT_3MF_CONTRACT)
         .output(crate::schema::output_schema_for::<crate::schema::file::ExportResult>)
-        .params("path; bodies?: [names] (default: every body); quality?: standard|fine|finest (default standard); objects?: body|component (as file.export) → {path, bytes, format}: 3MF, whatever the path's extension"),
+        .params("path; bodies?: [names] (default: every body); quality?: standard|fine|finest (default standard); units?: mm|cm|m|in|ft (the 3MF's unit; default mm); objects?: body|component (as file.export) → {path, bytes, format}: 3MF, whatever the path's extension"),
     CommandSpec::new("file.export_obj", "Export OBJ", crate::checked!("file.export_obj", export_obj_cmd))
         .icon("export")
         .noundo()
@@ -124,7 +124,7 @@ pub static COMMANDS: &[CommandSpec] = &[
         .noundo()
         .contract(&SAVE_MESH_CONTRACT)
         .output(crate::schema::output_schema_for::<crate::schema::save_mesh::SaveMeshResult>)
-        .params("path; format?: stl|3mf|3mf-tagged (default from the extension, else stl; 3mf-tagged: docs/formats/3mf-face-tags.md); bodies?: [names] (default: all); ascii?: bool (STL); slicer?: id or name from file.slicers, the program path it lists, or a program the user added under Custom… (send the saved file there, through the same steps as file.send_to_slicer: a slicer that has to be started first is waited for; may be deprecated later in favour of file.send_to_slicer or a Send to App workflow, kept for scripts); single_instance?: bool (default true; see file.send_to_slicer); quality?: standard|fine|finest (STL, OBJ and 3MF: how closely the mesh follows curved faces, a chord tolerance of 2e-4, 5e-5 or 1e-5 of each body's size; default standard); objects?: body|component (3MF only: one object per body, the default, or one object for each placed component with two or more bodies, with those bodies as its parts, so a slicer loads them as one object with parts)"),
+        .params("path; format?: stl|3mf|3mf-tagged (default from the extension, else stl; 3mf-tagged: docs/formats/3mf-face-tags.md); bodies?: [names] (default: all); ascii?: bool (STL); slicer?: id or name from file.slicers, the program path it lists, or a program the user added under Custom… (send the saved file there, through the same steps as file.send_to_slicer: a slicer that has to be started first is waited for; may be deprecated later in favour of file.send_to_slicer or a Send to App workflow, kept for scripts); single_instance?: bool (default true; see file.send_to_slicer); quality?: standard|fine|finest (STL, OBJ and 3MF: how closely the mesh follows curved faces, a chord tolerance of 2e-4, 5e-5 or 1e-5 of each body's size; default standard); units?: mm|cm|m|in|ft (STL and 3MF: the unit the coordinates are written in, scaled from the design's millimetres; a 3MF states it in its `unit` attribute, an STL has no unit field; default mm); objects?: body|component (3MF only: one object per body, the default, or one object for each placed component with two or more bodies, with those bodies as its parts, so a slicer loads them as one object with parts)"),
     CommandSpec::new("file.send_to_slicer", "Send to Slicer", send_to_slicer)
         .enabled(starts_programs)
         .at("INSERT", "FILES")
@@ -981,6 +981,17 @@ fn mesh_quality(p: &Value, cmd: &str) -> Result<solidcraft_io::MeshQuality> {
     }
 }
 
+/// A mesh export's `units`: the unit STL and 3MF coordinates are written in. Millimetres (as every
+/// export was) unless asked for; a design is kept in millimetres and scaled as it is written.
+fn mesh_unit(p: &Value, cmd: &str) -> Result<solidcraft_io::ExportUnit> {
+    match p.get("units") {
+        None | Some(Value::Null) => Ok(solidcraft_io::ExportUnit::default()),
+        Some(v) => {
+            v.as_str().and_then(solidcraft_io::ExportUnit::from_name).ok_or_else(|| bad(cmd, format!("`units` must be mm, cm, m, in or ft, not {v}")))
+        }
+    }
+}
+
 /// The 3MF parts a mesh export's `objects` asks for (#8139): none for `body` (the default, one
 /// object per body), or for `component` one part per placement of a component with two or more
 /// bodies ([`component_parts`]). Other formats have no parts, so `component` is refused there.
@@ -1027,7 +1038,13 @@ fn export_to(
     bodies: &[String],
     parts: &[(String, Vec<String>)],
     quality: solidcraft_io::MeshQuality,
+    unit: solidcraft_io::ExportUnit,
 ) -> Result<Value> {
+    if unit != solidcraft_io::ExportUnit::Millimeter
+        && !matches!(format, Format::StlBinary | Format::StlAscii | Format::ThreeMf | Format::ThreeMfTagged)
+    {
+        return Err(bad(cmd, "`units` is for STL and 3MF: other formats have no unit to write or fix their own"));
+    }
     if format == Format::Obj {
         // The colours of the bodies go in a material library beside the mesh file.
         return export_obj(s, path, bodies, quality);
@@ -1044,7 +1061,7 @@ fn export_to(
     } else {
         // Bodies carry the colour they are shown in (appearance, material or imported), and the
         // file the design's properties where the format has a place for them.
-        solidcraft_io::export_with_parts(&s.doc.painted(&*s.world_state()?), bodies, parts, format, &name, &s.doc.metadata, quality)?
+        solidcraft_io::export_with_unit(&s.doc.painted(&*s.world_state()?), bodies, parts, format, &name, &s.doc.metadata, quality, unit)?
     };
     solidcraft_io::vfs::write(path, &bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     let reply =
@@ -1090,33 +1107,34 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
         return export_urdf(s, cmd, path, p);
     }
     let quality = mesh_quality(p, cmd)?;
+    let unit = mesh_unit(p, cmd)?;
     let parts = mesh_parts(s, p, cmd, format)?;
-    export_to(s, cmd, path, format, &string_list(cmd, p, "bodies")?, &parts, quality)
+    export_to(s, cmd, path, format, &string_list(cmd, p, "bodies")?, &parts, quality, unit)
 }
 
 fn export_step(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "file.export_step";
     let path = path_arg(p, cmd)?;
-    export_to(s, cmd, path, Format::Step, &string_list(cmd, p, "bodies")?, &[], solidcraft_io::MeshQuality::default())
+    export_to(s, cmd, path, Format::Step, &string_list(cmd, p, "bodies")?, &[], solidcraft_io::MeshQuality::default(), Default::default())
 }
 
 fn export_stl(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "file.export_stl";
     let path = path_arg(p, cmd)?;
-    export_to(s, cmd, path, Format::StlBinary, &string_list(cmd, p, "bodies")?, &[], mesh_quality(p, cmd)?)
+    export_to(s, cmd, path, Format::StlBinary, &string_list(cmd, p, "bodies")?, &[], mesh_quality(p, cmd)?, mesh_unit(p, cmd)?)
 }
 
 fn export_3mf(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "file.export_3mf";
     let path = path_arg(p, cmd)?;
     let parts = mesh_parts(s, p, cmd, Format::ThreeMf)?;
-    export_to(s, cmd, path, Format::ThreeMf, &string_list(cmd, p, "bodies")?, &parts, mesh_quality(p, cmd)?)
+    export_to(s, cmd, path, Format::ThreeMf, &string_list(cmd, p, "bodies")?, &parts, mesh_quality(p, cmd)?, mesh_unit(p, cmd)?)
 }
 
 fn export_obj_cmd(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "file.export_obj";
     let path = path_arg(p, cmd)?;
-    export_to(s, cmd, path, Format::Obj, &string_list(cmd, p, "bodies")?, &[], mesh_quality(p, cmd)?)
+    export_to(s, cmd, path, Format::Obj, &string_list(cmd, p, "bodies")?, &[], mesh_quality(p, cmd)?, mesh_unit(p, cmd)?)
 }
 
 fn export_urdf_cmd(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1227,6 +1245,9 @@ fn save_mesh(s: &mut Session, p: &Value) -> Result<Value> {
     let quality = mesh_quality(p, cmd)?;
     let parts = mesh_parts(s, p, cmd, format)?;
     if let Some(spec) = str_(p, "slicer") {
+        if mesh_unit(p, cmd)? != solidcraft_io::ExportUnit::Millimeter {
+            return Err(bad(cmd, "`units` is not for a file sent to a slicer: slicers read millimetres"));
+        }
         #[cfg(target_arch = "wasm32")]
         {
             let _ = (spec, parts);
@@ -1249,7 +1270,7 @@ fn save_mesh(s: &mut Session, p: &Value) -> Result<Value> {
             },
         );
     }
-    export_to(s, cmd, path, format, &string_list(cmd, p, "bodies")?, &parts, quality)
+    export_to(s, cmd, path, format, &string_list(cmd, p, "bodies")?, &parts, quality, mesh_unit(p, cmd)?)
 }
 
 /// The browser build can't start a program.
@@ -1542,6 +1563,57 @@ mod tests {
             let e = s.execute("file.export", &json!({"path": dir.join("bad.stl").to_string_lossy(), "quality": bad})).unwrap_err().to_string();
             assert!(e.contains("`quality` must be standard, fine or finest"), "{bad}: {e}");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `units` writes STL and 3MF coordinates in that unit. A 10 x 20 x 30 mm box is 10/25.4 inch
+    /// wide in the STL, a 3MF in inches states it and reads back as 10 x 20 x 30 mm, the default is
+    /// still millimetres, and an unknown unit (or one with a slicer) is refused.
+    #[test]
+    fn a_mesh_export_is_written_in_the_unit_asked_for() {
+        let dir = std::env::temp_dir().join(format!("solidcraft-mesh-units-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut s = Session::default();
+        s.execute("solid.box", &json!({"length": 10, "width": 20, "height": 30})).unwrap();
+        let extent = |tris: &[[[f32; 3]; 3]]| -> [f64; 3] {
+            let mut lo = [f64::MAX; 3];
+            let mut hi = [f64::MIN; 3];
+            for v in tris.iter().flatten() {
+                for k in 0..3 {
+                    lo[k] = lo[k].min(f64::from(v[k]));
+                    hi[k] = hi[k].max(f64::from(v[k]));
+                }
+            }
+            [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]]
+        };
+        let mut sizes = |units: Option<&str>| -> [f64; 3] {
+            let path = dir.join(format!("box-{}.stl", units.unwrap_or("default"))).to_string_lossy().to_string();
+            let mut p = json!({"path": path});
+            if let Some(u) = units {
+                p["units"] = json!(u);
+            }
+            s.execute("file.export", &p).unwrap();
+            extent(&solidcraft_io::read_stl(&std::fs::read(&path).unwrap()).unwrap())
+        };
+        let close = |a: [f64; 3], b: [f64; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-4);
+        assert!(close(sizes(None), [10.0, 20.0, 30.0]));
+        assert!(close(sizes(Some("mm")), [10.0, 20.0, 30.0]));
+        assert!(close(sizes(Some("cm")), [1.0, 2.0, 3.0]));
+        assert!(close(sizes(Some("m")), [0.01, 0.02, 0.03]));
+        assert!(close(sizes(Some("IN")), [10.0 / 25.4, 20.0 / 25.4, 30.0 / 25.4]));
+        let inch_3mf = dir.join("box-inch.3mf").to_string_lossy().to_string();
+        s.execute("file.save_mesh", &json!({"path": inch_3mf, "units": "in"})).unwrap();
+        let bytes = std::fs::read(&inch_3mf).unwrap();
+        let (objects, _) = solidcraft_io::read_3mf(&bytes).unwrap();
+        let tris: Vec<[[f32; 3]; 3]> = objects.iter().flat_map(|o| o.triangles.iter().map(|t| t.map(|i| o.positions[i as usize].to_f32()))).collect();
+        assert!(close(extent(&tris), [10.0, 20.0, 30.0]), "a 3MF in inches states its unit, so it reads back in millimetres");
+        for bad in [json!("parsec"), json!(3), json!(true)] {
+            let e = s.execute("file.export", &json!({"path": dir.join("bad.stl").to_string_lossy(), "units": bad})).unwrap_err().to_string();
+            assert!(e.contains("`units` must be mm, cm, m, in or ft"), "{bad}: {e}");
+        }
+        let e =
+            s.execute("file.save_mesh", &json!({"path": dir.join("s.stl").to_string_lossy(), "units": "in", "slicer": "x"})).unwrap_err().to_string();
+        assert!(e.contains("slicers read millimetres"), "{e}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

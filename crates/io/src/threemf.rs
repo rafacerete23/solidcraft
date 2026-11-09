@@ -342,10 +342,17 @@ pub fn model_xml_with(objects: &[MeshObject], metadata: &[(&str, &str)]) -> Stri
 /// out of it, and a part left with fewer than two objects is not made: those objects are built
 /// on their own, as every object not in a part is.
 pub fn model_xml_parts(objects: &[MeshObject], parts: &[(String, Vec<usize>)], metadata: &[(&str, &str)]) -> String {
+    model_xml_unit(objects, parts, metadata, "millimeter")
+}
+
+/// [`model_xml_parts`] with the model's `unit` attribute (`millimeter`, `centimeter`, `meter`,
+/// `inch` or `foot`): the coordinates of `objects` are taken to be in that unit and written as
+/// they are.
+pub fn model_xml_unit(objects: &[MeshObject], parts: &[(String, Vec<usize>)], metadata: &[(&str, &str)], unit: &str) -> String {
     let mut x = String::new();
     x.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     let ft = if objects.iter().any(MeshObject::tagged) { format!(" xmlns:ft=\"{FACE_TAGS_NS}\"") } else { String::new() };
-    let _ = writeln!(x, "<model unit=\"millimeter\" xml:lang=\"en-US\" xmlns=\"{CORE_NS}\"{ft}>");
+    let _ = writeln!(x, "<model unit=\"{unit}\" xml:lang=\"en-US\" xmlns=\"{CORE_NS}\"{ft}>");
     x.push_str(" <metadata name=\"Application\">SolidCraft</metadata>\n");
     for (name, text) in metadata {
         let _ = writeln!(x, " <metadata name=\"{}\">{}</metadata>", esc(name), esc(text));
@@ -452,6 +459,11 @@ pub fn write_3mf_with(objects: &[MeshObject], metadata: &[(&str, &str)]) -> Resu
 
 /// A 3MF package of meshes, some of them written as objects with parts (see [`model_xml_parts`]).
 pub fn write_3mf_parts(objects: &[MeshObject], parts: &[(String, Vec<usize>)], metadata: &[(&str, &str)]) -> Result<Vec<u8>> {
+    write_3mf_unit(objects, parts, metadata, "millimeter")
+}
+
+/// [`write_3mf_parts`] with the model's `unit` (see [`model_xml_unit`]).
+pub fn write_3mf_unit(objects: &[MeshObject], parts: &[(String, Vec<usize>)], metadata: &[(&str, &str)], unit: &str) -> Result<Vec<u8>> {
     if objects.is_empty() {
         return Err(IoError::Empty);
     }
@@ -459,7 +471,7 @@ pub fn write_3mf_parts(objects: &[MeshObject], parts: &[(String, Vec<usize>)], m
     let rels = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n <Relationship Target=\"/3D/3dmodel.model\" Id=\"rel0\" Type=\"{MODEL_REL}\"/>\n</Relationships>\n"
     );
-    let model = model_xml_parts(objects, parts, metadata);
+    let model = model_xml_unit(objects, parts, metadata, unit);
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for (name, data) in [("[Content_Types].xml", content_types.as_bytes()), ("_rels/.rels", rels.as_bytes()), ("3D/3dmodel.model", model.as_bytes())]
     {

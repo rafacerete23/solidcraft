@@ -53,7 +53,8 @@ pub use gltf_in::{GltfImport, Loader, MAX_GLTF_BYTES, MeshPlan, PlanPlace, glb_c
 mod obj;
 pub use obj::read_obj;
 pub use threemf::{
-    MAX_3MF_BYTES, MeshObject, model_xml, model_xml_parts, model_xml_with, read_3mf, weld, write_3mf, write_3mf_parts, write_3mf_with,
+    MAX_3MF_BYTES, MeshObject, model_xml, model_xml_parts, model_xml_unit, model_xml_with, read_3mf, weld, write_3mf, write_3mf_parts,
+    write_3mf_unit, write_3mf_with,
 };
 pub use urdf::{UrdfOptions, UrdfPackage, urdf};
 
@@ -453,6 +454,64 @@ impl MeshQuality {
     }
 }
 
+/// The unit an STL or 3MF export is written in. Designs are kept in millimetres; an export in
+/// another unit scales the coordinates (an STL has no unit field, so the importing program is told
+/// out of band; a 3MF states it in its `unit` attribute, so every reader scales it back).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ExportUnit {
+    #[default]
+    Millimeter,
+    Centimeter,
+    Meter,
+    Inch,
+    Foot,
+}
+
+impl ExportUnit {
+    /// By the name commands take: `mm`, `cm`, `m`, `in` or `ft` (or the long form), in any case.
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "mm" | "millimeter" | "millimetre" => Some(Self::Millimeter),
+            "cm" | "centimeter" | "centimetre" => Some(Self::Centimeter),
+            "m" | "meter" | "metre" => Some(Self::Meter),
+            "in" | "inch" => Some(Self::Inch),
+            "ft" | "foot" => Some(Self::Foot),
+            _ => None,
+        }
+    }
+
+    /// Millimetres in one of this unit.
+    pub fn mm(self) -> f64 {
+        match self {
+            Self::Millimeter => 1.0,
+            Self::Centimeter => 10.0,
+            Self::Meter => 1000.0,
+            Self::Inch => 25.4,
+            Self::Foot => 304.8,
+        }
+    }
+
+    /// The name 3MF's `unit` attribute gives it.
+    pub fn name_3mf(self) -> &'static str {
+        match self {
+            Self::Millimeter => "millimeter",
+            Self::Centimeter => "centimeter",
+            Self::Meter => "meter",
+            Self::Inch => "inch",
+            Self::Foot => "foot",
+        }
+    }
+
+    /// `p` (millimetres) in this unit.
+    fn scale(self, p: Vec3) -> Vec3 {
+        if self == Self::Millimeter {
+            return p;
+        }
+        let k = 1.0 / self.mm();
+        Vec3::new(p.x * k, p.y * k, p.z * k)
+    }
+}
+
 /// Fine export mesh for a body (chord tolerance 2e-4 of its size).
 pub fn export_mesh(b: &solidcraft_kernel::Body) -> Result<Mesh> {
     export_mesh_at(b, MeshQuality::Standard)
@@ -829,6 +888,44 @@ pub fn export_with_parts(
         }
         Format::Design => return Err(IoError::Format("sc (save the document instead)".into())),
         Format::Urdf => return Err(IoError::Format("urdf (an assembly package; use file.export)".into())),
+    })
+}
+
+/// [`export_with_parts`] with the `unit` STL and 3MF coordinates are written in (millimetres by
+/// default; other formats keep their own units).
+#[allow(clippy::too_many_arguments)]
+pub fn export_with_unit(
+    state: &ModelState,
+    bodies: &[String],
+    parts: &[(String, Vec<String>)],
+    format: Format,
+    name: &str,
+    meta: &Metadata,
+    quality: MeshQuality,
+    unit: ExportUnit,
+) -> Result<Vec<u8>> {
+    if unit == ExportUnit::Millimeter || !matches!(format, Format::StlBinary | Format::StlAscii | Format::ThreeMf | Format::ThreeMfTagged) {
+        return export_with_parts(state, bodies, parts, format, name, meta, quality);
+    }
+    let sel = selected(state, bodies)?;
+    Ok(match format {
+        Format::StlBinary | Format::StlAscii => {
+            let meshes: Vec<Mesh> = per_body(&sel, |b| {
+                let m = export_mesh_at(&b.body, quality)?;
+                let (positions, triangles) = weld(&m.positions, &m.triangles, weld_eps(&b.body));
+                Ok(Mesh { positions: positions.into_iter().map(|p| unit.scale(p)).collect(), triangles, ..Mesh::default() })
+            })?;
+            if format == Format::StlBinary { stl_binary(&meshes, name) } else { stl_ascii(&meshes, name).into_bytes() }
+        }
+        _ => {
+            let mut objs: Vec<MeshObject> = per_body(&sel, |b| mesh_object(b, format == Format::ThreeMfTagged, quality))?;
+            for o in &mut objs {
+                o.positions = o.positions.iter().map(|&p| unit.scale(p)).collect();
+            }
+            let index = |n: &String| sel.iter().position(|b| &b.name == n);
+            let parts: Vec<(String, Vec<usize>)> = parts.iter().map(|(p, names)| (p.clone(), names.iter().filter_map(index).collect())).collect();
+            write_3mf_unit(&objs, &parts, &threemf_metadata(meta), unit.name_3mf())?
+        }
     })
 }
 

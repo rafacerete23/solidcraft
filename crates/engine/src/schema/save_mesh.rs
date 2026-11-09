@@ -66,6 +66,10 @@ pub struct SaveMeshKeys {
     /// or `finest`, a chord tolerance of 2e-4, 5e-5 or 1e-5 of each body's size. Default: standard.
     #[serde(default)]
     pub quality: Option<MeshQualityParam>,
+    /// The unit the coordinates are written in (STL and 3MF; a 3MF states it in its `unit`
+    /// attribute): `mm`, `cm`, `m`, `in` or `ft`. Default: mm.
+    #[serde(default)]
+    pub units: Option<String>,
     /// 3MF only: `body` is one object per body; `component` is one object for each placed
     /// component with two or more bodies, with those bodies as its parts, so a slicer loads them as
     /// one object with parts (other bodies stay objects of their own). `component` is refused for

@@ -60,6 +60,9 @@ pub struct ExportMeshParams {
     /// How closely the mesh follows curved faces. Default: standard.
     #[serde(default)]
     pub quality: Option<MeshQualityParam>,
+    /// The unit the coordinates are written in: `mm`, `cm`, `m`, `in` or `ft`. Default: mm.
+    #[serde(default)]
+    pub units: Option<String>,
 }
 
 /// Export bodies as a 3MF file, whatever the path's extension.
@@ -74,6 +77,9 @@ pub struct Export3mfParams {
     /// How closely the mesh follows curved faces. Default: standard.
     #[serde(default)]
     pub quality: Option<MeshQualityParam>,
+    /// The unit the coordinates are written in: `mm`, `cm`, `m`, `in` or `ft`. Default: mm.
+    #[serde(default)]
+    pub units: Option<String>,
     /// What each object in the file holds. Default: body.
     #[serde(default)]
     pub objects: Option<ObjectsParam>,
@@ -121,6 +127,10 @@ pub struct ExportParams {
     /// for URDF.
     #[serde(default)]
     pub quality: Option<MeshQualityParam>,
+    /// STL and 3MF: the unit the coordinates are written in: `mm`, `cm`, `m`, `in` or `ft`
+    /// (a 3MF states it in its `unit` attribute). Default: mm.
+    #[serde(default)]
+    pub units: Option<String>,
     /// What each object in a 3MF file holds. Default: body; `component` is refused for the other
     /// formats. Not read for URDF.
     #[serde(default)]
@@ -173,8 +183,17 @@ fn names<E: serde::de::Error>(m: &Map<String, Value>) -> Result<Option<StringLis
 impl<'de> Deserialize<'de> for ExportParams {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let m = Map::<String, Value>::deserialize(d)?;
-        let mut out =
-            ExportParams { path: None, format: None, bodies: None, quality: None, objects: None, mesh_prefix: None, effort: None, velocity: None };
+        let mut out = ExportParams {
+            path: None,
+            format: None,
+            bodies: None,
+            quality: None,
+            units: None,
+            objects: None,
+            mesh_prefix: None,
+            effort: None,
+            velocity: None,
+        };
         // The handler reads `path` first and refuses anything but a name it can write to; the
         // other keys are read only once it has one, and the format is known.
         out.path = match m.get("path") {
@@ -214,6 +233,13 @@ impl<'de> Deserialize<'de> for ExportParams {
                 Some(solidcraft_io::MeshQuality::Finest) => MeshQualityParam::Finest,
                 None => return Err(refuse(format!("`quality` must be standard, fine or finest, not {v}"))),
             }),
+        };
+        out.units = match m.get("units") {
+            None | Some(Value::Null) => None,
+            Some(v) => match v.as_str().filter(|u| solidcraft_io::ExportUnit::from_name(u).is_some()) {
+                Some(u) => Some(u.to_string()),
+                None => return Err(refuse(format!("`units` must be mm, cm, m, in or ft, not {v}"))),
+            },
         };
         out.objects = match m.get("objects") {
             None | Some(Value::Null) => None,
