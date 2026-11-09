@@ -3286,10 +3286,53 @@ fn apply_op(doc: &Document, state: &mut ModelState, f: &Feature, tools: Vec<Body
     apply_traced(doc, state, f, tools.into_iter().map(Traced::unnamed).collect(), op, targets)
 }
 
+/// The most cut tools [`clear_tools_as_one`] joins into one tool. The kernel's boolean takes
+/// far longer for a tool of many pieces than for several of fewer: one cut of 20 apart pieces
+/// into a ring took 0.34 s, of 40 1.75 s, of 60 6.4 s, of about 105 (a pattern of a pattern,
+/// #8765) 23 s. So more tools are joined in groups of at most this many, each cut in turn. This
+/// works around the boolean's cost; it does not change what is cut.
+const MAX_JOINED_TOOLS: usize = 32;
+
+#[cfg(test)]
+thread_local! {
+    /// [`MAX_JOINED_TOOLS`] for this thread's tests: a test cuts the same tools in one go.
+    static JOINED_TOOLS_LIMIT: std::cell::Cell<usize> = const { std::cell::Cell::new(MAX_JOINED_TOOLS) };
+}
+
+#[cfg(test)]
+fn joined_tools_limit() -> usize {
+    JOINED_TOOLS_LIMIT.with(std::cell::Cell::get)
+}
+
+#[cfg(not(test))]
+fn joined_tools_limit() -> usize {
+    MAX_JOINED_TOOLS
+}
+
 /// Many cut tools clear of each other (a pattern's copies, the circles of a vent field in one
 /// sketch) as one tool of many pieces, so the target is cut once instead of rebuilding an ever
 /// more complex body for every tool (#261, #368). Tools that may meet are left as they are.
+/// More than [`MAX_JOINED_TOOLS`] tools are joined in even groups, one tool for each (#8765).
 fn clear_tools_as_one(tools: Vec<Traced>) -> Result<Vec<Traced>> {
+    let limit = joined_tools_limit().max(1);
+    if tools.len() <= limit {
+        return clear_group_as_one(tools);
+    }
+    let groups = tools.len().div_ceil(limit);
+    let size = tools.len().div_ceil(groups);
+    let mut rest = tools.into_iter();
+    let mut out = Vec::new();
+    loop {
+        let group: Vec<Traced> = rest.by_ref().take(size).collect();
+        if group.is_empty() {
+            return Ok(out);
+        }
+        out.extend(clear_group_as_one(group)?);
+    }
+}
+
+/// [`clear_tools_as_one`] for one group of tools.
+fn clear_group_as_one(tools: Vec<Traced>) -> Result<Vec<Traced>> {
     if tools.len() < 8 {
         return Ok(tools);
     }
@@ -7662,12 +7705,28 @@ fn eval_feature(
             let mut constructor = None;
             let mut to_body = None;
             let tools = feature_tools_with_constructor(doc, vals, f, st, &mut constructor, &mut to_body, warning)?;
+            // #9969: a cut whose tool lies clear of the body (a profile drawn beside it, a
+            // distance that stops short, the wrong direction) reported success and changed
+            // nothing. Say so, as a hole does (#10701): the bodies are compared before and after,
+            // whether the cut went through sheet metal's flat pattern or the generic path.
+            let before: Option<Vec<Body>> = (*operation == Operation::Cut).then(|| st.bodies.iter().map(|b| b.body.clone()).collect());
+            let unchanged = |st: &ModelState, warning: &mut Option<String>| {
+                if let Some(before) = &before
+                    && !before.is_empty()
+                    && st.bodies.len() == before.len()
+                    && st.bodies.iter().zip(before).all(|(b, old)| old.same(&b.body))
+                {
+                    append_warning(warning, "the cut removes no material; check where its profile lies, the direction and the distance".into());
+                }
+            };
             // Cuts through sheet metal become cut-outs of its flat pattern.
             if matches!(operation, Operation::Cut | Operation::Intersect) && matches!(f.kind, FeatureKind::Extrude { .. }) && !st.sheets.is_empty() {
                 let bodies: Vec<Body> = tools.iter().map(|t| t.body.clone()).collect();
                 let handled = more::sheet_cut(f, st, &bodies, &crate::plain(targets), constructor.as_ref(), warning)?;
                 if !handled.is_empty() {
-                    return apply_beside_sheet_cut(doc, st, f, tools, *operation, &crate::plain(targets), &handled);
+                    apply_beside_sheet_cut(doc, st, f, tools, *operation, &crate::plain(targets), &handled)?;
+                    unchanged(st, warning);
+                    return Ok(());
                 }
             }
             // A join one sheet thick in the plane of a panel becomes part of that panel. A Join to an
@@ -7681,7 +7740,9 @@ fn eval_feature(
             // A Join extrude to an object joins that object too (#6424): the tool and the body
             // it runs to are one body, not only the body the profile was sketched on.
             let extra: Vec<String> = if *operation == Operation::Join { to_body.into_iter().collect() } else { Vec::new() };
-            apply_traced_with(doc, st, f, tools, *operation, &crate::plain(targets), &extra)
+            apply_traced_with(doc, st, f, tools, *operation, &crate::plain(targets), &extra)?;
+            unchanged(st, warning);
+            Ok(())
         }
         FeatureKind::Hole { thread, thread_depth, diameter, hand, modeled, ease_out, depth, to, .. } => {
             let thread_depth = thread_depth.as_ref().map(|d| val(vals, d, Kind::Length)).transpose()?;
@@ -7913,7 +7974,12 @@ fn eval_feature(
                 // A plane of numbers alone reads no body: placing them all is the design's size.
                 None if plane_is_fixed(plane) => doc.resolve_plane_in(vals, plane, 0, Some(st))?,
                 // Picks on bodies of other (moved) components are where those bodies are shown.
-                None => doc.resolve_plane_in(vals, plane, 0, Some(&*construction_state(doc, st, f.component)?))?,
+                None => doc.resolve_plane_in(
+                    vals,
+                    &*construction_planes_in_frame(doc, st, f.component, plane)?,
+                    0,
+                    Some(&*construction_state(doc, st, f.component)?),
+                )?,
             };
             st.construct.push(crate::construct::Construct {
                 feature: f.id,
@@ -8558,7 +8624,7 @@ fn eval_sketch(
             (doc.resolve_plane_in(vals, &sheet_face_plane_in_frame(doc, st, f.component, plane)?, 0, Some(&fst))?, None)
         }
         (None, PlaneRef::Face { plane: picked, at, name, anchor: None }) => face_plane(&fst, picked, *at, name.as_deref())?,
-        (None, other) => (doc.resolve_plane_in(vals, other, 0, Some(&fst))?, None),
+        (None, other) => (doc.resolve_plane_in(vals, &*construction_planes_in_frame(doc, st, f.component, other)?, 0, Some(&fst))?, None),
     };
     let mut sk = sketch.clone();
     // A text's outlines are rebuilt from its numbers when the links are refreshed: the
@@ -9324,6 +9390,55 @@ pub fn world_state_reusing(doc: &Document, st: &ModelState, placed_before: &mut 
     }
     *placed_before = placed_now;
     Ok(out)
+}
+
+/// `plane` for a feature of component `comp`, with each construction plane of another component
+/// (under any offset or flip of it) given as the plane where that component puts it, in `comp`'s
+/// frame (#11734). A construction plane is kept in its own component's frame, as the axes are
+/// (`construction_axis_in`), so a plane read as it is would fall in the wrong place for a feature
+/// of a component placed differently.
+fn construction_planes_in_frame<'a>(doc: &Document, st: &ModelState, comp: u64, plane: &'a PlaneRef) -> Result<std::borrow::Cow<'a, PlaneRef>> {
+    use std::borrow::Cow;
+    // The component of a feature, read from the timeline without `Document::feature`'s search counter.
+    fn owner_of(doc: &Document, id: u64) -> Option<u64> {
+        doc.features.iter().find(|f| f.id == id).map(|f| f.component)
+    }
+    fn foreign(doc: &Document, comp: u64, plane: &PlaneRef) -> bool {
+        match plane {
+            PlaneRef::Construction { feature } => owner_of(doc, feature.0).is_some_and(|owner| owner != comp),
+            PlaneRef::Offset { base, .. } | PlaneRef::Flipped { base, .. } | PlaneRef::AtAngle { base, .. } | PlaneRef::ThroughPoint { base, .. } => {
+                foreign(doc, comp, base)
+            }
+            _ => false,
+        }
+    }
+    fn map(doc: &Document, st: &ModelState, comp: u64, plane: &mut PlaneRef) -> Result<()> {
+        match plane {
+            PlaneRef::Construction { feature } => {
+                let owner = owner_of(doc, feature.0).unwrap_or(comp);
+                if owner == comp {
+                    return Ok(());
+                }
+                if let Some(crate::construct::ConstructGeom::Plane(pl)) = st.construct.iter().find(|c| c.feature == feature.0).map(|c| &c.geom) {
+                    let inverse = crate::mat_inverse(&doc.component_transform(comp))
+                        .ok_or_else(|| DocError::Invalid("the feature's component frame is invalid".into()))?;
+                    let m = crate::mat_mul(&inverse, &doc.component_transform(owner));
+                    *plane = PlaneRef::Custom { plane: placed_plane(&m, pl)? };
+                }
+            }
+            PlaneRef::Offset { base, .. } | PlaneRef::Flipped { base, .. } | PlaneRef::AtAngle { base, .. } | PlaneRef::ThroughPoint { base, .. } => {
+                map(doc, st, comp, base)?
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    if doc.occurrences.is_empty() || !foreign(doc, comp, plane) {
+        return Ok(Cow::Borrowed(plane));
+    }
+    let mut mapped = plane.clone();
+    map(doc, st, comp, &mut mapped)?;
+    Ok(Cow::Owned(mapped))
 }
 
 /// `plane` moved by the placement `m`; an error when `m` does not keep it a plane (a placement
