@@ -36,6 +36,15 @@ const FORMATS: [(&str, &str, &str); 3] = [("STL", "stl", "stl"), ("3MF", "3mf", 
 const EASYPRINT: &str = "easyprint";
 /// How closely the mesh follows curved faces (#4747): the label and `file.save_mesh`'s `quality`.
 const QUALITIES: [(&str, &str); 3] = [("Standard", "standard"), ("Fine", "fine"), ("Finest", "finest")];
+/// The unit the file's coordinates are written in: its label id and `file.save_mesh`'s `units`.
+/// The first is the command's own default.
+const UNITS: [(&str, &str); 5] = [
+    ("ui.save_mesh_unit_mm", "mm"),
+    ("ui.save_mesh_unit_cm", "cm"),
+    ("ui.save_mesh_unit_m", "m"),
+    ("ui.save_mesh_unit_in", "in"),
+    ("ui.save_mesh_unit_ft", "ft"),
+];
 /// Edge of a slicer's icon in the list.
 const ICON: f32 = 16.0;
 /// Most programs the user can keep in the list.
@@ -49,6 +58,9 @@ pub struct SaveMesh {
     open: bool,
     /// Index into [`QUALITIES`] (Save As Mesh; Send to Slicer has no quality row).
     quality: usize,
+    /// Index into [`UNITS`] (Save As Mesh; a file sent to a slicer is always in millimetres).
+    /// Not remembered: every opening starts in millimetres.
+    units: usize,
     /// The chosen slicer: an installed one's id, or the path of one the user added.
     slicer: String,
     /// The slicer list has not been read for this opening yet.
@@ -137,7 +149,7 @@ pub fn start(app: &SolveApp, id: &str) -> Option<(Kind, Vec<SelInput>)> {
         _ => String::new(),
     };
     let quality = QUALITIES.iter().position(|q| q.1 == p.save_mesh_quality).unwrap_or(0);
-    let kind = Kind::SaveMesh(SaveMesh { format, quality, open, slicer, stale: true, shown: None });
+    let kind = Kind::SaveMesh(SaveMesh { format, quality, units: 0, open, slicer, stale: true, shown: None });
     let mut inputs = vec![SelInput::new("Bodies", BODIES, true)];
     if open {
         inputs.push(SelInput::new("Print face", PLANAR_FACES, true));
@@ -381,6 +393,7 @@ pub fn rows(app: &mut SolveApp, ui: &mut egui::Ui, k: &mut SaveMesh, inputs: &mu
     if !k.open {
         choice_row(ui, "Format", "sm_format", &mut k.format, &FORMATS.map(|f| f.0));
         choice_row(ui, "Quality", "sm_quality", &mut k.quality, &QUALITIES.map(|q| q.0));
+        choice_row(ui, "ui.units", "sm_units", &mut k.units, &UNITS.map(|u| u.0));
         return false;
     }
     if k.stale {
@@ -548,6 +561,10 @@ pub fn commands(k: &SaveMesh, inputs: &[SelInput]) -> Result<Vec<(String, Value)
     // Standard is the command's own default, so it is left out. Sending has no quality row.
     if let Some((_, quality)) = QUALITIES.get(k.quality).filter(|_| k.quality > 0 && !k.open) {
         p["quality"] = json!(quality);
+    }
+    // Millimetres is the command's own default too. A file sent to a slicer is always in them.
+    if let Some((_, units)) = UNITS.get(k.units).filter(|_| k.units > 0 && !k.open) {
+        p["units"] = json!(units);
     }
     let names = crate::selection::items(inputs, 0).body_names();
     if names.is_empty() {
@@ -937,7 +954,7 @@ mod tests {
 
     #[test]
     fn send_to_slicer_asks_for_bodies_and_a_slicer_but_not_a_format() {
-        let k = SaveMesh { format: 0, quality: 0, open: true, slicer: "prusa".into(), stale: false, shown: None };
+        let k = SaveMesh { format: 0, quality: 0, units: 0, open: true, slicer: "prusa".into(), stale: false, shown: None };
         let mut input = SelInput::new("Bodies", BODIES, true);
         assert!(commands(&k, std::slice::from_ref(&input)).is_err());
         input.items = vec![Sel::Body { name: "Part".into() }];
@@ -956,11 +973,25 @@ mod tests {
     fn a_remembered_quality_goes_to_save_but_not_to_send() {
         let mut input = SelInput::new("Bodies", BODIES, true);
         input.items = vec![Sel::Body { name: "Part".into() }];
-        let k = SaveMesh { format: 0, quality: 2, open: true, slicer: "prusa".into(), stale: false, shown: None };
+        let k = SaveMesh { format: 0, quality: 2, units: 0, open: true, slicer: "prusa".into(), stale: false, shown: None };
         let (_, sent) = commands(&k, std::slice::from_ref(&input)).unwrap().remove(0);
         assert_eq!(sent.get("quality"), None, "sending has no quality row: the default applies");
         let (_, saved) = commands(&SaveMesh { open: false, ..k }, &[input]).unwrap().remove(0);
         assert_eq!(saved["quality"], "finest");
+    }
+
+    #[test]
+    fn units_go_to_save_but_not_to_send_and_millimetres_is_left_out() {
+        let mut input = SelInput::new("Bodies", BODIES, true);
+        input.items = vec![Sel::Body { name: "Part".into() }];
+        let k = SaveMesh { format: 0, quality: 0, units: 3, open: false, slicer: String::new(), stale: false, shown: None };
+        let (_, saved) = commands(&k, std::slice::from_ref(&input)).unwrap().remove(0);
+        assert_eq!(saved["units"], "in");
+        let (_, default) = commands(&SaveMesh { units: 0, ..k.clone() }, std::slice::from_ref(&input)).unwrap().remove(0);
+        assert_eq!(default.get("units"), None, "millimetres is the command's own default");
+        let (_, sent) = commands(&SaveMesh { open: true, slicer: "prusa".into(), ..k }, &[input]).unwrap().remove(0);
+        assert_eq!(sent.get("units"), None, "slicers read millimetres");
+        assert_eq!(UNITS.map(|u| u.1), ["mm", "cm", "m", "in", "ft"]);
     }
 
     #[test]

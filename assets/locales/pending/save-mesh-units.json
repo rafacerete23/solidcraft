@@ -1,0 +1,65 @@
+{
+  "en": {
+    "ui.save_mesh_unit_mm": "Millimeters",
+    "ui.save_mesh_unit_cm": "Centimeters",
+    "ui.save_mesh_unit_m": "Meters",
+    "ui.save_mesh_unit_in": "Inches",
+    "ui.save_mesh_unit_ft": "Feet"
+  },
+  "en-GB": {
+    "ui.save_mesh_unit_mm": "Millimetres",
+    "ui.save_mesh_unit_cm": "Centimetres",
+    "ui.save_mesh_unit_m": "Metres",
+    "ui.save_mesh_unit_in": "Inches",
+    "ui.save_mesh_unit_ft": "Feet"
+  },
+  "de": {
+    "ui.save_mesh_unit_mm": "Millimeter",
+    "ui.save_mesh_unit_cm": "Zentimeter",
+    "ui.save_mesh_unit_m": "Meter",
+    "ui.save_mesh_unit_in": "Zoll",
+    "ui.save_mesh_unit_ft": "Fuß"
+  },
+  "ar": {
+    "ui.save_mesh_unit_mm": "ملليمترات",
+    "ui.save_mesh_unit_cm": "سنتيمترات",
+    "ui.save_mesh_unit_m": "أمتار",
+    "ui.save_mesh_unit_in": "بوصات",
+    "ui.save_mesh_unit_ft": "أقدام"
+  },
+  "he": {
+    "ui.save_mesh_unit_mm": "מילימטרים",
+    "ui.save_mesh_unit_cm": "סנטימטרים",
+    "ui.save_mesh_unit_m": "מטרים",
+    "ui.save_mesh_unit_in": "אינצ׳ים",
+    "ui.save_mesh_unit_ft": "רגל"
+  },
+  "ja": {
+    "ui.save_mesh_unit_mm": "ミリメートル",
+    "ui.save_mesh_unit_cm": "センチメートル",
+    "ui.save_mesh_unit_m": "メートル",
+    "ui.save_mesh_unit_in": "インチ",
+    "ui.save_mesh_unit_ft": "フィート"
+  },
+  "vi": {
+    "ui.save_mesh_unit_mm": "Milimét",
+    "ui.save_mesh_unit_cm": "Xentimét",
+    "ui.save_mesh_unit_m": "Mét",
+    "ui.save_mesh_unit_in": "Inch",
+    "ui.save_mesh_unit_ft": "Feet"
+  },
+  "zh": {
+    "ui.save_mesh_unit_mm": "毫米",
+    "ui.save_mesh_unit_cm": "厘米",
+    "ui.save_mesh_unit_m": "米",
+    "ui.save_mesh_unit_in": "英寸",
+    "ui.save_mesh_unit_ft": "英尺"
+  },
+  "ko": {
+    "ui.save_mesh_unit_mm": "밀리미터",
+    "ui.save_mesh_unit_cm": "센티미터",
+    "ui.save_mesh_unit_m": "미터",
+    "ui.save_mesh_unit_in": "인치",
+    "ui.save_mesh_unit_ft": "피트"
+  }
+}
